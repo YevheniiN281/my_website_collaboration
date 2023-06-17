@@ -90,12 +90,12 @@ params:
         title: Aliquam
         url: blogs/blog4
       - image: pic02.jpg
-        subtitle: Feugiat Amet Tempus
-        title: Tempus
+        # subtitle: My CV
+        title: My CV
         url: blogs/Eugene_Nesterenko_CV.pdf
       - image: Eugene_Nesterenko_formal.jpeg
-        subtitle: Lorem Etiam Nullam
-        title: Magna
+        # subtitle: Image library
+        title: Image library
         url: blogs/Eugene_Nesterenko_formal.jpeg
       - image: pic04.jpg
         subtitle: Nisl Sed Aliquam
@@ -105,10 +105,10 @@ params:
         subtitle: Ipsum Dolor Sit Amet
         title: Consequat
         url: blogs/ipsum
-      - image: pic06.jpg
-        subtitle: Feugiat Amet Tempus
-        title: Etiam
-        url: blogs/ipsum
+      - image: Bechdel_test_image.jpg
+        subtitle: I use various regression and ML models to predict whether a movie will pass a Bechdel test
+        title: Bechdel test predictions
+        url: blogs/Bechdel.html
   two:
     buttonText: Get Started
     enable: yes
