@@ -7,10 +7,11 @@ disqusShortname: ''
 params:
   banner:
     buttonText: Get Started
-     subtitle: I am a student at London Business School, and I am taking my first steps in DataScience
+    #subtitle: |- 
     #   A RESPONSIVE SITE TEMPLATE DESIGNED BY HTML5 UP
     #   AND RELEASED UNDER THE CREATIVE COMMONS.
-    title: Hi, my name is Eugene Nesterenko, 
+    title: Hi, my name is Eugene Nesterenko
+    subtitle: I am a student at London Business School, and I am taking my first steps in Data Science
   blog: {}
   contact:
     address:
@@ -35,7 +36,7 @@ params:
     text: Please visit [this page](/)
   favicon: favicon.ico
   footer:
-    copyright: London Business School
+    copyright: Eugene Nesterenko
     enable: yes
     quicklinks:
       - alt: HTML5 UP
@@ -57,7 +58,10 @@ params:
       - icon: fa-linkedin
         label: LinkedIn
         url: https://www.linkedin.com/in/eugene-nesterenko/
-  image: ''
+      - icon: fa-file-alt
+        label: CV
+        url: https://www.linkedin.com/in/eugene-nesterenko/
+  image: 'Eugene Nesterenko formal.jpeg'
   name: Eugene Nesterenko
   navigation:
     button1:
