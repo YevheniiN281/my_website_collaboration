@@ -1,31 +1,31 @@
-baseURL: http://example.org/
+baseURL: https://eugene-nesterenko-lbs.netlify.app
 languageCode: en-us
-title: Forty
+title: Personal website by Eugene Nesterenko
 theme: forty
 googleAnalytics: ''
 disqusShortname: ''
 params:
   banner:
     buttonText: Get Started
-    subtitle: |-
-      A RESPONSIVE SITE TEMPLATE DESIGNED BY HTML5 UP
-      AND RELEASED UNDER THE CREATIVE COMMONS.
-    title: Hi, my name is Forty
+    # subtitle: |-
+    #   A RESPONSIVE SITE TEMPLATE DESIGNED BY HTML5 UP
+    #   AND RELEASED UNDER THE CREATIVE COMMONS.
+    title: Hi, my name is Eugene Nesterenko, I am a student at London Business School, and I am taking my first steps in DataScience
   blog: {}
   contact:
     address:
-      - city: City, ST 00000
-        country: Country
-        street: Street
+      - city: London, NW87AD
+        country:  United Kingdom
+        street: Robin House, Barrow Hill Estate
         title: Address
     buttonClear: Clear
     buttonSend: Send message
     email:
-      - email: example@domain.com
+      - email: enesterenko.mba2024@london.edu
         title: Email
     enable: yes
     phone:
-      - phone: (000) 000-0000 x1234
+      - phone: +44(734) 297-3504 
         title: Phone
   custom_css: []
   custom_js: []
