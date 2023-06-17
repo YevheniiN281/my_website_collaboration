@@ -88,15 +88,15 @@ params:
       - image: pic01.jpg
         subtitle: Ipsum Dolor Sit Amet
         title: Aliquam
-        url: blogs/aliquam
+        url: blogs/blog4
       - image: pic02.jpg
         subtitle: Feugiat Amet Tempus
         title: Tempus
-        url: blogs/tempus
-      - image: pic03.jpg
+        url: blogs/Eugene_Nesterenko_CV.pdf
+      - image: Eugene_Nesterenko_formal.jpeg
         subtitle: Lorem Etiam Nullam
         title: Magna
-        url: blogs/magna
+        url: blogs/Eugene_Nesterenko_formal.jpeg
       - image: pic04.jpg
         subtitle: Nisl Sed Aliquam
         title: Ipsum
