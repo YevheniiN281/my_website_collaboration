@@ -7,14 +7,14 @@ disqusShortname: ''
 params:
   banner:
     buttonText: Get Started
-    # subtitle: |-
+     subtitle: I am a student at London Business School, and I am taking my first steps in DataScience
     #   A RESPONSIVE SITE TEMPLATE DESIGNED BY HTML5 UP
     #   AND RELEASED UNDER THE CREATIVE COMMONS.
-    title: Hi, my name is Eugene Nesterenko, I am a student at London Business School, and I am taking my first steps in DataScience
+    title: Hi, my name is Eugene Nesterenko, 
   blog: {}
   contact:
     address:
-      - city: London, NW87AD
+      - city: London, NW8 7AD
         country:  United Kingdom
         street: Robin House, Barrow Hill Estate
         title: Address
@@ -25,40 +25,40 @@ params:
         title: Email
     enable: yes
     phone:
-      - phone: +44(734) 297-3504 
+      - phone: +44(734) 297-****
         title: Phone
   custom_css: []
   custom_js: []
-  description: Your description
+  description: Personal website by Eugene Nesterenko. Data analytics results may be used freely in educational purposes.
   error404:
     heading: Page couldn't be found
     text: Please visit [this page](/)
   favicon: favicon.ico
   footer:
-    copyright: Company Name
+    copyright: London Business School
     enable: yes
     quicklinks:
       - alt: HTML5 UP
         text: 'Design: '
         url: https://www.html5up.net
     social:
-      - icon: fa-twitter
-        label: Twitter
-        url: https://www.twitter.com
-      - icon: fa-facebook
-        label: Facebook
-        url: https://www.facebook.com
-      - icon: fa-instagram
-        label: Instagram
-        url: https://www.instagram.com
+      # - icon: fa-twitter
+      #   label: Twitter
+      #   url: https://www.twitter.com
+      # - icon: fa-facebook
+      #   label: Facebook
+      #   url: https://www.facebook.com
+      # - icon: fa-instagram
+      #   label: Instagram
+      #   url: https://www.instagram.com
       - icon: fa-github
         label: GitHub
-        url: https://www.github.com
+        url: https://github.com/YevheniiN281
       - icon: fa-linkedin
         label: LinkedIn
-        url: https://www.linkedin.com
+        url: https://www.linkedin.com/in/eugene-nesterenko/
   image: ''
-  name: Your name
+  name: Eugene Nesterenko
   navigation:
     button1:
       - name: Get Started
