@@ -103,8 +103,8 @@ params:
         url: blogs/CV_page.html
       - image: pic05.jpg
         subtitle: Ipsum Dolor Sit Amet
-        title: Consequat
-        url: blogs/ipsum
+        title: My CV 3
+        url: blogs/CV_page_formatted.html
       - image: Bechdel_test_image.jpg
         subtitle: I use various regression and ML models to predict whether a movie will pass a Bechdel test
         title: Bechdel test predictions
