@@ -61,7 +61,7 @@ params:
       - icon: fa-file-alt
         label: CV
         url: https://www.linkedin.com/in/eugene-nesterenko/
-  image: 'Eugene Nesterenko formal.jpeg'
+  image: 'Eugene Nesterenko formal.jpg'
   name: Eugene Nesterenko
   navigation:
     button1:
@@ -85,41 +85,34 @@ params:
   tiles:
     enable: yes
     showcase:
-      - image: pic01.jpg
-        subtitle: Ipsum Dolor Sit Amet
-        title: Aliquam
+      - image: flight.jpg
+        subtitle: I apply basic descriptive statistics analysis to the data about flights from NYC airports
+        title: Flights from NYC
         url: blogs/blog4
-      - image: pic02.jpg
-        # subtitle: My CV
-        title: My CV
-        url: blogs/Eugene_Nesterenko_CV.pdf
-      - image: Eugene_Nesterenko_formal.jpeg
-        # subtitle: Image library
-        title: Image library
-        url: blogs/Eugene_Nesterenko_formal.jpeg
-      - image: pic04.jpg
-        subtitle: A new web page with a CV
-        title: My CV 2
-        url: blogs/CV_page.html
-      - image: pic05.jpg
-        subtitle: Ipsum Dolor Sit Amet
-        title: My CV 3
-        url: blogs/CV_page_formatted.html
+      - image: parliament.jpg
+        subtitle: I research patterns in the donations to UK parties and MPs
+        title: Money in the UK politics
+        url: blogs/Eugene_Nesterenko_formal.jpg
       - image: Bechdel_test_image.jpg
         subtitle: I use various regression and ML models to predict whether a movie will pass a Bechdel test
         title: Bechdel test predictions
         url: blogs/Bechdel.html
-  two:
-    buttonText: Get Started
-    enable: yes
-    subtitle: "Nullam et orci eu lorem consequat tincidunt vivamus et sagittis libero.
-      \n    Mauris aliquet magna magna sed nunc rhoncus pharetra. \n    Pellentesque
-      condimentum sem. In efficitur ligula tate urna. Maecenas laoreet massa vel lacinia
-      pellentesque lorem ipsum dolor. \n    Nullam et orci eu lorem consequat tincidunt.
-      Vivamus et sagittis libero.\n    Mauris aliquet magna magna sed nunc rhoncus
-      amet pharetra et feugiat tempus."
-    title: Massa libero
-    url: blogs
+      - image: resume_icon.jpg
+        subtitle: Short summary of my education and work experience
+        title: Curriculum Vitae
+        url: blogs/CV_page_formatted.html
+
+  # two:
+  #   buttonText: Get Started
+  #   enable: yes
+  #   subtitle: "Nullam et orci eu lorem consequat tincidunt vivamus et sagittis libero.
+  #     \n    Mauris aliquet magna magna sed nunc rhoncus pharetra. \n    Pellentesque
+  #     condimentum sem. In efficitur ligula tate urna. Maecenas laoreet massa vel lacinia
+  #     pellentesque lorem ipsum dolor. \n    Nullam et orci eu lorem consequat tincidunt.
+  #     Vivamus et sagittis libero.\n    Mauris aliquet magna magna sed nunc rhoncus
+  #     amet pharetra et feugiat tempus."
+  #   title: Further analysis
+  #   url: blogs
     
 markup: 
   goldmark: 
