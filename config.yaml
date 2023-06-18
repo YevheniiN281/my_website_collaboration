@@ -73,12 +73,12 @@ params:
     links:
       - name: Home
         url: '#'
-      - name: Blogs
-        url: blogs
-      - name: Generic Blog
-        url: blogs/ipsum
-      - name: Elements
-        url: elements.html
+      # - name: Blogs
+      #   url: blogs
+      # - name: Generic Blog
+      #   url: blogs/ipsum
+      # - name: Elements
+      #   url: elements.html
     menu: Menu
     subtitle: By HTML5 Up
     title: Forty
@@ -88,7 +88,7 @@ params:
       - image: flight.jpg
         subtitle: I apply basic descriptive statistics analysis to the data about flights from NYC airports
         title: Flights from NYC
-        url: blogs/blog4
+        url: blogs/Flights_NYC.html
       - image: parliament.jpg
         subtitle: I research patterns in the donations to UK parties and MPs
         title: Money in the UK politics
