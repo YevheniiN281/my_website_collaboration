@@ -1,0 +1,321 @@
+---
+title: 'Homework 3: Databases, web scraping, and a basic Shiny app'
+author: "Eugene Nesterenko, github YevheniiN281"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+  html_document:
+    theme: flatly
+    highlight: zenburn
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+    code_folding: show
+---
+
+```{r}
+#| label: load-libraries
+#| echo: false # This option disables the printing of code (only output is displayed).
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(wbstats)
+library(tictoc)
+library(skimr)
+library(countrycode)
+library(here)
+library(DBI)
+library(dbplyr)
+library(arrow)
+library(rvest)
+library(robotstxt) # check if we're allowed to scrape the data
+library(scales)
+library(sf)
+library(readxl)
+```
+
+# Money in UK politics
+
+[The Westminster Accounts](https://news.sky.com/story/the-westminster-accounts-12786091), a recent collaboration between Sky News and Tortoise Media, examines the flow of money through UK politics. It does so by combining data from three key sources:
+
+1.  [Register of Members' Financial Interests](https://www.parliament.uk/mps-lords-and-offices/standards-and-financial-interests/parliamentary-commissioner-for-standards/registers-of-interests/register-of-members-financial-interests/),
+2.  [Electoral Commission records of donations to parties](http://search.electoralcommission.org.uk/English/Search/Donations), and
+3.  [Register of All-Party Parliamentary Groups](https://www.parliament.uk/mps-lords-and-offices/standards-and-financial-interests/parliamentary-commissioner-for-standards/registers-of-interests/register-of-all-party-party-parliamentary-groups/).
+
+You can [search and explore the results](https://news.sky.com/story/westminster-accounts-search-for-your-mp-or-enter-your-full-postcode-12771627) through the collaboration's interactive database. Simon Willison [has extracted a database](https://til.simonwillison.net/shot-scraper/scraping-flourish) and this is what we will be working with. If you want to read more about [the project's methodology](https://www.tortoisemedia.com/2023/01/08/the-westminster-accounts-methodology/).
+
+## Open a connection to the database
+
+The database made available by Simon Willison is an `SQLite` database
+
+```{r}
+sky_westminster <- DBI::dbConnect(
+  drv = RSQLite::SQLite(),
+  dbname = here::here("data", "sky-westminster-files.db")
+)
+
+class(sky_westminster)
+```
+
+How many tables does the database have?
+
+The table has 7 tables:
+
+-   appg_donatons
+
+-   appgs
+
+-   member_appgs
+
+-   members
+
+-   parties
+
+-   party_donations
+
+-   payments
+
+```{r}
+DBI::dbListTables(sky_westminster)
+```
+
+## Which MP has received the most amount of money?
+
+You need to work with the `payments` and `members` tables and for now we just want the total among all years. To insert a new, blank chunk of code where you can write your beautiful code (and comments!), please use the following shortcut: `Ctrl + Alt + I` (Windows) or `cmd + option + I` (mac)
+
+```{r}
+#| label: MP with most money donated
+
+# Reference the tables from the database
+payments <- dplyr::tbl(sky_westminster, "payments")
+members <- dplyr::tbl(sky_westminster, "members")
+
+payments_members <- left_join(x = payments, y = members, by = c("member_id"="id"))
+
+
+
+library(forcats)
+
+# Creating a dataframe with top-10 members by size of total donaions
+top_members <- left_join(x = payments, y = members, by = c("member_id"="id")) %>% 
+  group_by(name) %>% 
+  summarize(total_donations_000 = round(sum(value) / 1000,0)) %>% 
+  select(name, total_donations_000) %>% 
+  slice_max(order_by = total_donations_000, n=10)
+
+
+# converting to dataframe 
+# (for some reason R did not treat "top_members" as dataframe, which resulted in problems when applying fct_reorder function)
+df_top_members <-as.data.frame(top_members)
+
+my_colours_2 <- c("grey80", "navy") 
+
+# Building a bar chart for the top-10 members by size of donation in a descending order
+df_top_members %>%    
+  
+  mutate(
+    million_donations = ifelse(total_donations_000 >= 1000, TRUE, FALSE),
+    name = forcats::fct_reorder(name, total_donations_000)
+    ) %>%
+  
+  ggplot(aes(y = name , x = total_donations_000, fill = million_donations)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_manual(values = my_colours_2) +
+  geom_text(
+    aes(label = total_donations_000, x = total_donations_000 - .25),
+    colour = "white",
+    size = 5,
+    hjust = 1) +
+  
+  # Adding theme and axis titles
+  theme_minimal(base_size = 12)+
+  labs(
+        title = "",
+        subtitle = "Only 3 MPs received more than £1m in donations",
+        x = "Donations, £'000",
+        y = NULL
+      ) +
+      NULL
+
+```
+
+## Any `entity` that accounts for more than 5% of all donations?
+
+Is there any `entity` whose donations account for more than 5% of the total payments given to MPs over the 2020-2022 interval? Who are they and who did they give money to?
+
+```{r}
+#| label: entities with >5% donations
+
+# Function to return last n characters
+library(stringr)
+
+# Create a variable for the year of donation
+payments <- payments %>% 
+  mutate(year = as.integer(str_sub(date,-4)))
+
+# Summarize percentage of total donations by entity
+entity_donations <- payments %>% 
+  
+  # Include only years 2020-2022
+  filter(year %in% c(2020:2022)) %>%
+  
+  # Group by entity
+  group_by(entity) %>%
+  
+  # Summarize absolute value and calculate percentage value of the donations by entity
+  summarize(total_donations = sum(value)) %>% 
+  mutate(percent_donations = round((total_donations / sum(total_donations)) *100,1)) %>%
+  
+  # Select only entity and percentage of donations, arrange from largest to smallest percentage
+  select(entity, percent_donations) %>% 
+  
+  slice_max(order_by = percent_donations, n=10)
+
+df_entity_donations <- as.data.frame(entity_donations)
+
+#define colours to use: grey for everything, tomato for major donors (>5%)
+my_colours <- c("grey80", "navy") 
+
+df_entity_donations %>% 
+  
+  # Reordering donors by % of donations (descending) and marking the donors who contributed more than 5%
+  mutate(
+    major_donor = ifelse(percent_donations > 5,TRUE,FALSE),
+    entity = forcats::fct_reorder(entity, percent_donations)
+    ) %>%
+
+
+  # Building a horizontal bar chart for the percentage of donations
+  ggplot(aes(y = entity , x = percent_donations, fill = major_donor)) +
+  geom_col(show.legend = FALSE) +
+  scale_fill_manual(values = my_colours) +
+  geom_text(
+    aes(label = percent_donations, x = percent_donations - .05),
+    colour = "white",
+    size = 5,
+    hjust = 1) +
+  
+  # Adding theme and axis titles
+  theme_minimal(base_size = 12)+
+  labs(
+        title = "",
+        subtitle = "Withers LLP contributed more than 5% of total donations",
+        x = "Percent of donations",
+        y = NULL
+      ) +
+      NULL
+```
+
+## Do `entity` donors give to a single party or not?
+
+-   How many distinct entities who paid money to MPS are there?
+
+```{r}
+# Select distinct entities from payments table
+unique_entities <- payments %>% 
+  distinct(entity)
+
+# Convert the result to dataframe
+unique_entities <- as.data.frame(unique_entities)
+
+# Print the number of distinct entities
+print(paste("Number of distinct entities =", nrow(unique_entities)))
+```
+
+-   How many (as a number and %) donated to MPs belonging to a single party only?
+
+```{r}
+
+# Reference the parties table from the database
+parties <- dplyr::tbl(sky_westminster, "parties")
+
+# Create a joined table for MPs and their parties
+member_party <- left_join(x = members, y = parties, by = c("party_id"="id")) %>% 
+  mutate(
+    member_name = name.x,
+    party_name = name.y
+    ) %>% 
+  select(member_name, id, party_name, party_id)
+
+# Join the payments table with MP/parties dataframe
+payments_members_party <- left_join(x = payments, y = member_party, by = c("member_id"="id"))
+
+entity_party_donations <- payments_members_party %>% 
+  group_by(entity, party_name) %>% 
+  summarize(total_donations_000 = round(sum(value) / 1000,0), na.rm=FALSE) %>%
+  select(entity, party_name, total_donations_000)
+
+entity_party_donations_classifier <- entity_party_donations %>% 
+  group_by(entity) %>% 
+  summarize(recepients_number = n(), na.rm=FALSE) %>% 
+  mutate(single_party_donor = ifelse(recepients_number == 1, TRUE, FALSE))
+
+entity_party_donations <- left_join(x = entity_party_donations, y = entity_party_donations_classifier, by = "entity") %>% 
+  mutate(proved_single_party_donation = single_party_donor * total_donations_000)
+
+entity_party_donations %>%
+  ungroup() %>% 
+  summarize(single_party_donors = as.double(sum(single_party_donor)),
+            total_donors = as.double(n()),
+            single_party_donations = sum(proved_single_party_donation),
+            total_donations = sum(total_donations_000),
+            ) %>% 
+  mutate(
+    percent_single_donors = round((single_party_donors/total_donors)*100,0),
+    percent_single_donations = round((single_party_donations/total_donations)*100,0)
+    )
+```
+
+**2036 entities (82% of total)** donate only to members of one party
+
+In terms of total donation value, **£29.9m (86%)** comes from entities that donate only to members of one party.
+
+## Which party has raised the greatest amount of money in each of the years 2020-2022?
+
+***I can not understand the question, as next to blocks of code do not return any result. I would expect the .png file to open somewhere (or be shown in the Viewer) - however, I only have the .db file for the whole database.***
+
+I would like you to write code that generates the following table.
+
+```{r echo=FALSE, out.width="80%"}
+knitr::include_graphics(here::here("images", "total_donations_table.png"), error = FALSE)
+```
+
+... and then, based on this data, plot the following graph.
+
+```{r echo=FALSE, out.width="80%"}
+knitr::include_graphics(here::here("images", "total_donations_graph.png"), error = FALSE)
+```
+
+This uses the default ggplot colour pallete, as I dont want you to worry about using the [official colours for each party](https://en.wikipedia.org/wiki/Wikipedia:Index_of_United_Kingdom_political_parties_meta_attributes). However, I would like you to ensure the parties are sorted according to total donations and not alphabetically. You may even want to remove some of the smaller parties that hardly register on the graph. Would facetting help you?
+
+Finally, when you are done working with the databse, make sure you close the connection, or disconnect from the database.
+
+```{r}
+dbDisconnect(sky_westminster)
+```
+
+# Deliverables
+
+There is a lot of explanatory text, comments, etc. You do not need these, so delete them and produce a stand-alone document that you could share with someone. Knit the edited and completed R Markdown (Rmd) file as a Word or HTML document (use the "Knit" button at the top of the script editor window) and upload it to Canvas. You must be commiting and pushing your changes to your own Github repo as you go along.
+
+# Details
+
+-   Who did you collaborate with: TYPE NAMES HERE
+-   Approximately how much time did you spend on this problem set: ANSWER HERE
+-   What, if anything, gave you the most trouble: ANSWER HERE
+
+**Please seek out help when you need it,** and remember the [15-minute rule](https://dsb2023.netlify.app/syllabus/#the-15-minute-rule){target="_blank"}. You know enough R (and have enough examples of code from class and your readings) to be able to do this. If you get stuck, ask for help from others, post a question on Slack-- and remember that I am here to help too!
+
+> As a true test to yourself, do you understand the code you submitted and are you able to explain it to someone else?
+
+# Rubric
+
+13/13: Problem set is 100% completed. Every question was attempted and answered, and most answers are correct. Code is well-documented (both self-documented and with additional comments as necessary). Used tidyverse, instead of base R. Graphs and tables are properly labelled. Analysis is clear and easy to follow, either because graphs are labeled clearly or you've written additional text to describe how you interpret the output. Multiple Github commits. Work is exceptional. I will not assign these often.
+
+8/13: Problem set is 60--80% complete and most answers are correct. This is the expected level of performance. Solid effort. Hits all the elements. No clear mistakes. Easy to follow (both the code and the output). A few Github commits.
+
+5/13: Problem set is less than 60% complete and/or most answers are incorrect. This indicates that you need to improve next time. I will hopefully not assign these often. Displays minimal effort. Doesn't complete all components. Code is poorly written and not documented. Uses the same type of plot for each graph, or doesn't use plots appropriate for the variables being analyzed. No Github commits.

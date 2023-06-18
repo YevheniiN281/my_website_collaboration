@@ -1,0 +1,942 @@
+---
+title: 'Homework 4: Machine Learning'
+author: "Eugene Nesterenko, github YevheniiN281"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    highlight: zenburn
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+    code_folding: show
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r}
+#| label: load-libraries
+#| echo: false # This option disables the printing of code (only output is displayed).
+#| message: false
+#| warning: false
+options(scipen = 999) #disable scientific notation
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(sf)
+library(leaflet)
+library(janitor)
+library(rpart.plot)
+library(here)
+library(scales)
+library(vip)
+```
+
+# The Bechdel Test
+
+<https://fivethirtyeight.com/features/the-dollar-and-cents-case-against-hollywoods-exclusion-of-women/>
+
+The [Bechdel test](https://bechdeltest.com) is a way to assess how women are depicted in Hollywood movies. In order for a movie to pass the test:
+
+1.  It has to have at least two [named] women in it
+2.  Who talk to each other
+3.  About something besides a man
+
+There is a nice article and analysis you can find here <https://fivethirtyeight.com/features/the-dollar-and-cents-case-against-hollywoods-exclusion-of-women/> We have a sample of 1394 movies and we want to fit a model to predict whether a film passes the test or not.
+
+```{r read_data}
+
+bechdel <- read_csv(here::here("data", "bechdel.csv")) %>% 
+  mutate(test = factor(test)) 
+glimpse(bechdel)
+
+```
+
+How many films fail/pass the test, both as a number and as a %?
+
+```{r}
+
+# Grouping the data by pass/fail criterion, counting occurances and percantage of each
+bechdel %>% 
+  group_by(test) %>% 
+  summarize(count = n()) %>% 
+  mutate(percentage = round(count/sum(count)*100,1)) %>% 
+  print()
+```
+
+772 movies (55.4%) **fail** the Bechdel test, while only 622 (44.6%) **pass** it. The naive prediction would be that every movie fails the Bechdel test, and we expect it to be correct in 55.4% of cases.
+
+## Movie scores
+
+```{r}
+ggplot(data = bechdel, aes(
+  x = metascore,
+  y = imdb_rating,
+  colour = test
+)) +
+  geom_point(alpha = .3, size = 3) +
+  scale_colour_manual(values = c("tomato", "olivedrab")) +
+  labs(
+    x = "Metacritic score",
+    y = "IMDB rating",
+    colour = "Bechdel test"
+  ) +
+ theme_light()
+```
+
+There seem to be a positive correlation of IMDB rating and Metacritic score (which is natural if both ratings assess a common factor - the "true" quality of the movie). However, it's hard to tell from the graph whether there is correlation or causal relationship between rating and ability to pass Bechdel test.
+
+# Split the data
+
+```{r}
+# **Split the data**
+
+set.seed(123)
+
+data_split <- initial_split(bechdel, # updated data
+                           prop = 0.8, 
+                           strata = test)
+
+bechdel_train <- training(data_split) 
+bechdel_test <- testing(data_split)
+```
+
+Check the counts and % (proportions) of the `test` variable in each set.
+
+```{r}
+
+# Grouping the data by pass/fail criterion, counting occurances and percantage of each
+# Apply separately to training sample
+bechdel_train %>% 
+  group_by(test) %>% 
+  summarize(count = n()) %>% 
+  mutate(percentage = round(count/sum(count)*100,1)) %>% 
+  print()
+
+
+# Grouping the data by pass/fail criterion, counting occurances and percantage of each
+# Apply separately to testing sample
+bechdel_test %>% 
+  group_by(test) %>% 
+  summarize(count = n()) %>% 
+  mutate(percentage = round(count/sum(count)*100,1)) %>% 
+  print()
+```
+
+Both in the **training sample** and in the **testing sample** proportion of films who pass (fail) remains the same - 55.4% (44.6%), which indicates a good split, **both samples are representative**. Counts are proportionately lower, roughly in line with 80/20 split (to be precise, 79.9/20.1). Total count in both divided samples and undivided population is 1394, which means **no observation were omitted**.
+
+## Feature exploration
+
+## Any outliers?
+
+```{r}
+
+bechdel %>% 
+  select(test, budget_2013, domgross_2013, intgross_2013, imdb_rating, metascore) %>% 
+
+    pivot_longer(cols = 2:6,
+               names_to = "feature",
+               values_to = "value") %>% 
+  ggplot()+
+  aes(x=test, y = value, fill = test)+
+  coord_flip()+
+  geom_boxplot()+
+  facet_wrap(~feature, scales = "free")+
+  theme_bw()+
+  theme(legend.position = "none")+
+  labs(x=NULL,y = NULL)
+```
+
+Practically for any variable there is a number of outliers, most prominent for financial metrics:
+
+-   Budget: outliers start from \$15-20m
+
+-   Domestic box office: outliers collect from \$25-30m
+
+-   International box office: outliers collect from \$50-60m
+
+We can expect that on average, high-budget film have box office both in the U.S. and internationally, i.e. outliers in one variable coincide with outliers in others.
+
+For ratings, there are a few outliers for the IMDB rating (below 4-5) and practically no distinct outliers for Metacritic score. However, the latter variable also has wider interquartile range (25% - about 50 score; 75% - about 75 score).
+
+## Scatterplot - Correlation Matrix
+
+Write a paragraph discussing the output of the following
+
+```{r, warning=FALSE, message=FALSE}
+bechdel %>% 
+  select(test, budget_2013, domgross_2013, intgross_2013, imdb_rating, metascore)%>% 
+  ggpairs(aes(colour=test), alpha=0.2)+
+  theme_bw()
+```
+
+We would ignore the relation of independent variables to the "test" variable, as it was briefly discussed in the previous paragraph and would require more detailed analysis when applying the model.
+
+The independent variables distribution itself is a point of interest:
+
+-   **Money variables (budget, domestic and international box gross revenues)** are highly right skewed, with the majority observations relatively close to 0, but few are blockbuster projects with high budget and high box office. The distribution is definitely not normal, and looks much like lognormal or Poisson. There is no prominent difference between movies that pass of fail the Bechdel test.
+
+-   I**MDB rating** distribution is closer to normal, but it still exhibits a little skewness (left). The outliers are movies of a bad quality (apparently, it is easy to produce a significantly worse than average movie but extremely hard to produce a significantly better one). There is no significant difference between movies that pass of fail the Bechdel test.
+
+-   **Metacritic score** is likely normally distributed, but with a large coefficient of variation (score could go either extremely high or extremely low, there is less centered expectation of movies). There is no significant difference between movies that pass of fail the Bechdel test.
+
+Correlation analysis among independent variables provides additional insights:
+
+-   **Budget** is positively (but not perfectly) correlated with b**oth domestic and international box office**. Apparently, to produce a commercially successful product, a movie studio needs substantial investment: hire good director, scenarist, actors, allocate enough time for production. We expect a causal relationship here, as budget is spent prior to revenues.
+
+-   Obviously, **domestic and international revenues** are almost perfectly correlated, but they depend on a third factor(s) - movie quality (and probably scale, proxied by budget). If the movie is good, it would profit in both markets.
+
+-   Both ratings (**IMDB and Metacritic)** have slightly positive correlation with **revenues (domestic and international)**. We suggest that initially both variables in a pair would depend on a third factor - movie quality; but later ratings would shape viewers preferences, praising box office for good movies and hindering for bad ones.
+
+-   **Ratings themselves are highly correlated**, but we expect the relationship to be drawn from the third factor - movie quality.
+
+-   **Budget correlation with ratings is small and insignificant** - you can't just pour money and expect to people to love the movie.
+
+High correlation for pairs of variables (domestic revenues ; international revenues) and (IMDB rating ; Metacritic score) indicate a **multicollinearity**, which would impact the regression results, both estimates and standard errors.
+
+At this point, we would recommend either **omitting duplicating variables** (international revenues, Metacritic score) or trying to divide factor influence by **applying PCA** (principal component analysis). However, for the sake of this assignment, we would use the whole set of variables to train models and compare them.
+
+## Categorical variables
+
+Write a paragraph discussing the output of the following
+
+```{r}
+bechdel %>% 
+  group_by(genre, test) %>%
+  summarise(n = n()) %>% 
+  mutate(prop = n/sum(n))
+  
+ 
+bechdel %>% 
+  group_by(rated, test) %>%
+  summarise(n = n()) %>% 
+  mutate(prop = n/sum(n))
+```
+
+The probability to pass a score seems to vary significantly with genre. For instance, among comedies, as much as 57% of movies pass the Bechdel test, while among action movies, the rate is only 29%. (one explanation could be that action movies are typically high-violence plots with masculine characters).
+
+The influence of production rating (which is, to our understanding, a category restricting which ages audience can watch the movie) is not significant. There are categories (G and NC-17) with unusually low scores. But for the categories with large enough number of observations, difference in average probability is negligible (from 43% to 47%)
+
+# Train first models. `test ~ metascore + imdb_rating`
+
+```{r}
+lr_mod <- logistic_reg() %>% 
+  set_engine(engine = "glm") %>% 
+  set_mode("classification")
+
+lr_mod
+
+
+tree_mod <- decision_tree() %>% 
+  set_engine(engine = "C5.0") %>% 
+  set_mode("classification")
+
+tree_mod 
+```
+
+```{r}
+
+
+lr_fit <- lr_mod %>% # parsnip model
+  fit(test ~ metascore + imdb_rating, # a formula
+    data = bechdel_train # dataframe
+  )
+
+tree_fit <- tree_mod %>% # parsnip model
+  fit(test ~ metascore + imdb_rating, # a formula
+    data = bechdel_train # dataframe
+  )
+```
+
+## Logistic regression
+
+```{r}
+lr_fit %>%
+  broom::tidy()
+
+lr_preds <- lr_fit %>%
+  augment(new_data = bechdel_train) %>%
+  mutate(.pred_match = if_else(test == .pred_class, 1, 0))
+
+```
+
+Logistic regression seems to indicate positive influence of Metacritic score to pass the Bechdel test, and negative influence of IMDB rating, with both variables statistically significant at 95% confidence. However, potential multicollinearity between independent variables raises a question whether estimates are reliable. In particular, it seems counterintuitive that one rating favors the probability of passing the Bechdel test while another one hinders it.
+
+### Confusion matrix
+
+```{r}
+lr_preds %>% 
+  conf_mat(truth = test, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+```
+
+In our opinion, model quality is not very good, both in terms of prediction capability (12.3% false positives as opposed to 15.2% true positives) and test power (29.4% of false negatives compared to 43.1% of true negatives). However, it is still marginally better than the naive model predicting Fail all the time (58.3% of total correct predictions vs 55.4%)
+
+## Decision Tree
+
+```{r}
+tree_preds <- tree_fit %>%
+  augment(new_data = bechdel_train) %>%
+  mutate(.pred_match = if_else(test == .pred_class, 1, 0)) 
+
+
+```
+
+```{r}
+tree_preds %>% 
+  conf_mat(truth = test, estimate = .pred_class) %>% 
+  autoplot(type = "heatmap")
+```
+
+We have amended the code to use the same training sample as in case with logistic regression.
+
+The result is more or less the same, with larger percentage of false positives (14% vs 12% in logistic regression) but lower percentage of false negatives (28% vs 29%). Overall, the choice of model would depend on what is more important to the researcher - predict the pass correctly or not making a mistake of failing to predict a pass.
+
+## Draw the decision tree
+
+```{r}
+draw_tree <- 
+    rpart::rpart(
+        test ~ metascore + imdb_rating,
+        data = bechdel_train, # uses data that contains both birth weight and `low`
+        control = rpart::rpart.control(maxdepth = 5, cp = 0, minsplit = 10)
+    ) %>% 
+    partykit::as.party()
+plot(draw_tree)
+
+```
+
+The decision tree seems to be too detailed, with frequently less than 10 observations in each bucket. We suspect the problem of overfitting.
+
+# Cross Validation
+
+Run the code below. What does it return?
+
+```{r}
+set.seed(123)
+bechdel_folds <- vfold_cv(data = bechdel_train, 
+                          v = 10, 
+                          strata = test)
+bechdel_folds
+```
+
+The code returns a list of 10 folds (splits) that we are going to use it later one by one in the cross-validation stage.
+
+## `fit_resamples()`
+
+Trains and tests a resampled model.
+
+```{r}
+lr_fit <- lr_mod %>%
+  fit_resamples(
+    test ~ metascore + imdb_rating,
+    
+    # Instead of data, the argument is resamples - perhaps, to use in a loop?
+    resamples = bechdel_folds
+  )
+
+
+tree_fit <- tree_mod %>%
+  fit_resamples(
+    test ~ metascore + imdb_rating,
+    resamples = bechdel_folds
+  )
+```
+
+## `collect_metrics()`
+
+Unnest the metrics column from a tidymodels `fit_resamples()`
+
+```{r}
+
+collect_metrics(lr_fit)
+collect_metrics(tree_fit)
+
+
+```
+
+Based on the area under the ROC curve criterion, the logistic regression is a better choice on average (60.6% correct predictions), whereas decision tree model actually shows **worse** results than the naive model (54.7% vs 55.4%).
+
+```{r}
+tree_preds <- tree_mod %>% 
+  fit_resamples(
+    test ~ metascore + imdb_rating, 
+    resamples = bechdel_folds,
+    control = control_resamples(save_pred = TRUE) #<<
+  )
+
+# What does the data for ROC look like?
+tree_preds %>% 
+  collect_predictions() %>% 
+  roc_curve(truth = test, .pred_Fail)  
+
+# Draw the ROC
+tree_preds %>% 
+  collect_predictions() %>% 
+  roc_curve(truth = test, .pred_Fail) %>% 
+  autoplot()
+
+```
+
+Dependent only on ratings (IMDB and Metacritic), the model seems to perform better than the naive prediction, with ROC curve surpassing 45 degrees angle line for most of the times. However, we would need to look additionally at the area under the curve.
+
+# Build a better training set with `recipes`
+
+## Preprocessing options
+
+-   Encode categorical predictors
+-   Center and scale variables
+-   Handle class imbalance
+-   Impute missing data
+-   Perform dimensionality reduction
+-   ... ...
+
+## To build a recipe
+
+1.  Start the `recipe()`
+2.  Define the variables involved
+3.  Describe **prep**rocessing [step-by-step]
+
+## Collapse Some Categorical Levels
+
+Do we have any `genre` with few observations? Assign genres that have less than 3% to a new category 'Other'
+
+```{r}
+#| echo = FALSE
+bechdel %>% 
+  count(genre) %>% 
+  mutate(genre = fct_reorder(genre, n)) %>% 
+  ggplot(aes(x = genre, 
+             y = n)) +
+  geom_col(alpha = .8) +
+  coord_flip() +
+  labs(x = NULL) +
+  geom_hline(yintercept = (nrow(bechdel_train)*.03), lty = 3)+
+  theme_light()
+
+# Obsolete code
+# bechdel_genre_collapsed <-bechdel %>% 
+#   count(genre) %>% 
+#   mutate(genre = ifelse(n < nrow(bechdel_train)*.03, "Other", genre))
+# 
+# bechdel_genre_collapsed
+# 
+# bechdel_genre_collapsed2 <- bechdel_genre_collapsed %>% 
+#   group_by(genre) %>% 
+#   summarize(count = sum(n))
+# 
+# bechdel_genre_collapsed2
+```
+
+```{r}
+movie_rec <-
+  recipe(test ~ .,
+         data = bechdel_train) %>%
+  
+  # Genres with less than 5% will be in a catewgory 'Other'
+    step_other(genre, threshold = .03) 
+```
+
+## Before recipe
+
+```{r}
+#| echo = FALSE
+bechdel_train %>% 
+  count(genre, sort = TRUE)
+```
+
+## After recipe
+
+```{r}
+movie_rec %>% 
+  prep() %>% 
+  bake(new_data = bechdel_train) %>% 
+  count(genre, sort = TRUE)
+```
+
+## `step_dummy()`
+
+Converts nominal data into numeric dummy variables
+
+```{r}
+#| results = "hide"
+movie_rec <- recipe(test ~ ., data = bechdel) %>%
+  step_other(genre, threshold = .03) %>% 
+  step_dummy(all_nominal_predictors()) 
+
+movie_rec 
+```
+
+## Let's think about the modelling
+
+What if there were no films with `rated` NC-17 in the training data?
+
+-   Will the model have a coefficient for `rated` NC-17?
+-   What will happen if the test data includes a film with `rated` NC-17?
+
+The model will have no coefficient, because the dummy variable for the NC-17 would not be created in the first place. Subsequently, if test data includes such observations, two things could happen:
+
+-   The model breaks down as it does not know how to interpret new value of the variable (or it splits new variables in a list of dummies with 1 extra compared to the testing sample)
+
+-   The model just ignores the unknown value, applying 0 to all dummies and in fact using the implied coefficient for the base value (say, rating "G"). However, actual category ("NC-17") is different, which would distort prediction capabilities.
+
+## `step_novel()`
+
+Adds a catch-all level to a factor for any new values not encountered in model training, which lets R intelligently predict new levels in the test set.
+
+```{r}
+
+movie_rec <- recipe(test ~ ., data = bechdel) %>%
+  step_other(genre, threshold = .03) %>% 
+  step_novel(all_nominal_predictors) %>% # Use *before* `step_dummy()` so new level is dummified
+  step_dummy(all_nominal_predictors()) 
+
+```
+
+## `step_zv()`
+
+Intelligently handles zero variance variables (variables that contain only a single value)
+
+```{r}
+movie_rec <- recipe(test ~ ., data = bechdel) %>%
+  step_other(genre, threshold = .03) %>% 
+  step_novel(all_nominal(), -all_outcomes()) %>% # Use *before* `step_dummy()` so new level is dummified
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_numeric(), -all_outcomes()) 
+  
+```
+
+## `step_normalize()`
+
+Centers then scales numeric variable (mean = 0, sd = 1)
+
+```{r}
+movie_rec <- recipe(test ~ ., data = bechdel) %>%
+  step_other(genre, threshold = .03) %>% 
+  step_novel(all_nominal(), -all_outcomes()) %>% # Use *before* `step_dummy()` so new level is dummified
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_numeric(), -all_outcomes())  %>% 
+  step_normalize(all_numeric()) 
+
+```
+
+## `step_corr()`
+
+Removes highly correlated variables
+
+```{r}
+movie_rec <- recipe(test ~ ., data = bechdel) %>%
+  step_other(genre, threshold = .03) %>% 
+  step_novel(all_nominal(), -all_outcomes()) %>% # Use *before* `step_dummy()` so new level is dummified
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_numeric(), -all_outcomes())  %>% 
+  step_normalize(all_numeric()) #   Remove the last line to save processing time %>% 
+ # step_corr(all_predictors(), threshold = 0.75, method = "spearman") 
+
+
+
+movie_rec
+```
+
+# Define different models to fit
+
+```{r}
+## Model Building
+
+# 1. Pick a `model type`
+# 2. set the `engine`
+# 3. Set the `mode`: regression or classification
+
+# Logistic regression
+log_spec <-  logistic_reg() %>%  # model type
+  set_engine(engine = "glm") %>%  # model engine
+  set_mode("classification") # model mode
+
+# Show your model specification
+log_spec
+
+# Decision Tree
+tree_spec <- decision_tree() %>%
+  set_engine(engine = "C5.0") %>%
+  set_mode("classification")
+
+tree_spec
+
+# Random Forest
+library(ranger)
+
+rf_spec <- 
+  rand_forest() %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("classification")
+
+
+# Boosted tree (XGBoost)
+library(xgboost)
+
+xgb_spec <- 
+  boost_tree() %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification") 
+
+# K-nearest neighbour (k-NN)
+knn_spec <- 
+  nearest_neighbor(neighbors = 4) %>% # we can adjust the number of neighbors 
+  set_engine("kknn") %>% 
+  set_mode("classification") 
+```
+
+# Bundle recipe and model with `workflows`
+
+```{r}
+log_wflow <- # new workflow object
+ workflow() %>% # use workflow function
+ add_recipe(movie_rec) %>%   # use the new recipe
+ add_model(log_spec)   # add your model spec
+
+# show object
+log_wflow
+
+
+## A few more workflows
+
+tree_wflow <-
+ workflow() %>%
+ add_recipe(movie_rec) %>% 
+ add_model(tree_spec) 
+
+rf_wflow <-
+ workflow() %>%
+ add_recipe(movie_rec) %>% 
+ add_model(rf_spec) 
+
+xgb_wflow <-
+ workflow() %>%
+ add_recipe(movie_rec) %>% 
+ add_model(xgb_spec)
+
+knn_wflow <-
+ workflow() %>%
+ add_recipe(movie_rec) %>% 
+ add_model(knn_spec)
+
+```
+
+HEADS UP
+
+1.  How many models have you specified? **5**
+2.  What's the difference between a model specification and a workflow? To our understanding, model specification relates to the choice of model and setting relevant parameters, such as engine and mode (classification or regression). A workflow is a more detailed process of working with the data (including using the recipe to manipulate data, and applying the model of choice)
+3.  Do you need to add a formula (e.g., `test ~ .`) if you have a recipe? No, because in the recipe we have chosen our variables (and manipulated data) beforehand.
+
+# Model Comparison
+
+You now have all your models. Adapt the code from slides `code-from-slides-CA-housing.R`, line 400 onwards to assess which model gives you the best classification.
+
+**LOGISTIC REGRESSION**
+
+```{r}
+log_res <- log_wflow %>% 
+  fit_resamples(
+    resamples = bechdel_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, accuracy,
+      kap, roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)) 
+
+
+log_res %>%  collect_metrics(summarize = TRUE)
+
+log_res %>%  collect_metrics(summarize = FALSE)
+```
+
+**Collect results to compare further**
+
+```{r}
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+log_pred <- log_res %>% collect_predictions()
+
+log_pred %>%  conf_mat(test, .pred_class) 
+
+log_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+log_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+log_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(test, .pred_Pass) %>% 
+  autoplot()
+
+```
+
+Logistic regression after cross-validation seems to have inferior results:
+
+-   Area under the ROC curve is just 47.3%, which is not only lower than in the naive model (55.4%), but even worse than just flipping a coin (50% chance).
+
+-   Sensitivity and specificity are below 50%, which indicates both large number of false positives and false negative alerts. The confusion matrix supports this conclusion, the number of false positives (328 is particularly troubling).
+
+-   Some ROC curves pass largely below the 50/50 line, these must be folds at which the model performs particularly poor. There is misalignment when some ROC-curves are higher than 50/50 line (good prediction quality) but some are lower (bad quality).
+
+**DECISION TREE**
+
+```{r}
+tree_res <- tree_wflow %>% 
+  fit_resamples(
+    resamples = bechdel_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, accuracy,
+      kap, roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)) 
+
+
+tree_res %>%  collect_metrics(summarize = TRUE)
+
+tree_res %>%  collect_metrics(summarize = FALSE)
+
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+tree_pred <- tree_res %>% collect_predictions()
+
+tree_pred %>%  conf_mat(test, .pred_class) 
+
+tree_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+tree_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+tree_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(test, .pred_Pass) %>% 
+  autoplot()
+```
+
+Base decision tree model performs better and is more or less robust:
+
+-   Most ROC-curves pass below the 50/50 prediction line, but the graph seems to be inverted, so it is actually a good sign. In other way, if the model constantly predicts wrong, we could just take model results and do the opposite.\
+    Area under the ROC curve is 59.1%, which is better than naive model accuracy (55.4%).
+
+-   Sensitivity, which is a measure of true positive rate, is quite high - 63.7%, which makes model a good candidate for prediction.
+
+-   Specificity, which is a measure of true negative rate, is not that good - only 53%, which indicates potential overlook of movies that would actually fail the Bechdel test.
+
+**RANDOM FOREST**
+
+```{r}
+rf_res <- rf_wflow %>% 
+  fit_resamples(
+    resamples = bechdel_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, accuracy,
+      kap, roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)) 
+
+
+rf_res %>%  collect_metrics(summarize = TRUE)
+
+rf_res %>%  collect_metrics(summarize = FALSE)
+
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+rf_pred <- rf_res %>% collect_predictions()
+
+rf_pred %>%  conf_mat(test, .pred_class) 
+
+rf_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+rf_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+rf_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(test, .pred_Pass) %>% 
+  autoplot()
+```
+
+Random forest model, making use of various decision trees, turns out to show even better results and is quite robust:
+
+-   All ROC-curves for the most part pass below the 50/50 line. Again, with all curves alignment, it is actually a good sign.\
+    Area under the ROC curve is on average 65.9%, superior to all previous model (logistic regression, naive "Fail" prediction, and decision tree).
+
+-   Sensitivity is very high - 77.8%, which makes model a perfect candidate for prediction, better than in the decision tree model.
+
+-   However, specificity is below 50% (marginally worse than for the decision tree), which indicates potential overlook of movies that would actually fail the Bechdel test. A researcher needs to decide what is more important - predict pass or fail with more certainty).
+
+**GRADIENT BOOSTING**
+
+```{r}
+xgb_res <- xgb_wflow %>% 
+  fit_resamples(
+    resamples = bechdel_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, accuracy,
+      kap, roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)) 
+
+
+xgb_res %>%  collect_metrics(summarize = TRUE)
+
+xgb_res %>%  collect_metrics(summarize = FALSE)
+
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+xgb_pred <- xgb_res %>% collect_predictions()
+
+xgb_pred %>%  conf_mat(test, .pred_class) 
+
+xgb_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+xgb_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+xgb_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(test, .pred_Pass) %>% 
+  autoplot()
+```
+
+Gradient boosting model also looks promising, showing a little more modest results on average but being the most robust:
+
+-   Average area under the ROC-curve is 64.4%, marginally below that of random forest model (65.9%).
+
+-   All ROC curves lie almost entirely below the 50/50 line (good if there is alignment). Moreover, ROC-curves for different folds are not too far away, which indicates a great robustness to potential changes in data.
+
+-   Sensitivity is quite high at 71.1%, making the model a good candidate for prediction. It is lower, however, that in random forest model.
+
+-   Sensitivity is not great (53.9%), but better than in random forest model.
+
+Overall, we would expect gradient boosting model to perform more robust and be useful in cases when we need a balanced approach in classifying positive and negative cases.
+
+**K-NEAREST NEIGHBORS**
+
+```{r}
+knn_res <- knn_wflow %>% 
+  fit_resamples(
+    resamples = bechdel_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, accuracy,
+      kap, roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)) 
+
+
+knn_res %>%  collect_metrics(summarize = TRUE)
+
+knn_res %>%  collect_metrics(summarize = FALSE)
+
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+knn_pred <- knn_res %>% collect_predictions()
+
+knn_pred %>%  conf_mat(test, .pred_class) 
+
+knn_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+knn_pred %>% 
+  conf_mat(test, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+knn_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(test, .pred_Pass) %>% 
+  autoplot()
+```
+
+K-nearest neighbors algorithm gives controversial results, with bad performance on average but the best in specificity:
+
+-   Average area under the ROC-curve is only 54.8%, marginally below naive "Fail prediction"
+
+-   ROC-curves are sometimes above, sometimes below 50/50 line - not a great robustness
+
+-   Sensitivity is unusually high - almost 90%, which makes pass predictions very reliable
+
+-   Specificity is unusually low - around 10%, which makes fail predictions very unreliable
+
+Overall, model seems to predict test failure almost all the time. When it does predict a pass, it is very reliable result (hence, high sensitivity), but in the general classification task (predict both pass and fail) the model is not so useful.
+
+**MODEL CHOICE**
+
+To summarize, we think that two models are useful for the classification purposes: **random forest and gradient boosting**. The choice would depend on researcher's goals:
+
+**Random forest** gives the best predictions on average and should be used when reliability of a pass prediction (true positive rate) is more important than reliability of a fail prediction (true negative rate).
+
+**Gradient boosting** is marginally worse on average, but is useful when a researcher wants to apply a more balanced approach between positive and negative predictions. It also seems to be more robust, which makes it safer to apply on unknown data.
+
+# Deliverables
+
+There is a lot of explanatory text, comments, etc. You do not need these, so delete them and produce a stand-alone document that you could share with someone. Knit the edited and completed R Markdown (Rmd) file as a Word or HTML document (use the "Knit" button at the top of the script editor window) and upload it to Canvas. You must be commiting and pushing your changes to your own Github repo as you go along.
+
+# Details
+
+-   Who did you collaborate with: None
+-   Approximately how much time did you spend on this problem set: 8 hours
+-   What, if anything, gave you the most trouble: ANSWER HERE
+
+**Please seek out help when you need it,** and remember the [15-minute rule](https://dsb2023.netlify.app/syllabus/#the-15-minute-rule){target="_blank"}. You know enough R (and have enough examples of code from class and your readings) to be able to do this. If you get stuck, ask for help from others, post a question on Slack-- and remember that I am here to help too!
+
+> As a true test to yourself, do you understand the code you submitted and are you able to explain it to someone else?
+
+# Rubric
+
+13/13: Problem set is 100% completed. Every question was attempted and answered, and most answers are correct. Code is well-documented (both self-documented and with additional comments as necessary). Used tidyverse, instead of base R. Graphs and tables are properly labelled. Analysis is clear and easy to follow, either because graphs are labeled clearly or you've written additional text to describe how you interpret the output. Multiple Github commits. Work is exceptional. I will not assign these often.
+
+8/13: Problem set is 60--80% complete and most answers are correct. This is the expected level of performance. Solid effort. Hits all the elements. No clear mistakes. Easy to follow (both the code and the output). A few Github commits.
+
+5/13: Problem set is less than 60% complete and/or most answers are incorrect. This indicates that you need to improve next time. I will hopefully not assign these often. Displays minimal effort. Doesn't complete all components. Code is poorly written and not documented. Uses the same type of plot for each graph, or doesn't use plots appropriate for the variables being analyzed. No Github commits.
