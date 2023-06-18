@@ -88,7 +88,7 @@ params:
       - image: flight.jpg
         subtitle: I apply basic descriptive statistics analysis to the data about flights from NYC airports
         title: Flights from NYC
-        url: blogs/Flights_NYC_2.html
+        url: blogs/Flights_NYC.html
       - image: parliament.jpg
         subtitle: I research patterns in the donations to UK parties and MPs
         title: Money in the UK politics
