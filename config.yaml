@@ -92,7 +92,7 @@ params:
       - image: parliament.jpg
         subtitle: I research patterns in the donations to UK parties and MPs
         title: Money in the UK politics
-        url: blogs/Eugene_Nesterenko_formal.jpg
+        url: blogs/Money_UK_Politics.html
       - image: Bechdel_test_image.jpg
         subtitle: I use various regression and ML models to predict whether a movie will pass a Bechdel test
         title: Bechdel test predictions
